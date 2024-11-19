@@ -1,3 +1,7 @@
+import os
+
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -41,18 +45,11 @@ class SupervisedTraining:
 
     def get_accuracy(self, outputs, targets):     
         """
-        Computes accuracy using the provided accuracy metric.
+        Computes accuracy for classification tasks.
         """
 
         preds = torch.argmax(outputs, dim=1)
         return Accuracy(preds, targets)
-    
-    def get_resolution(self, outputs, targets):
-        """
-        Computes resolution.
-        """
-
-        
 
     def train_epoch(self):
         """
@@ -62,6 +59,7 @@ class SupervisedTraining:
         current_train_loss = 0.0
         accuracy = 0.0
 
+        self.model.train()
         for train_inputs, train_targets in tqdm(self.trainloader):
             train_inputs = train_inputs.to(self.device)
             train_targets = train_targets.to(self.device)
@@ -69,12 +67,17 @@ class SupervisedTraining:
             self.optimizer.zero_grad()
 
             train_outputs = self.model(train_inputs)
-            train_loss = self.criterion(train_outputs.flatten(), train_targets)
-            train_loss.backward()
-            self.optimizer.step()
+            train_loss = self.criterion(train_outputs if self.is_classification else train_outputs.flatten(), train_targets)
 
             current_train_loss += train_loss.item()
-            if accuracy is not None:
+
+            train_loss.backward()
+            self.optimizer.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            # Compute accuracy for classification tasks
+            if self.is_classification:
                 accuracy += self.get_accuracy(train_outputs, train_targets)
 
         return current_train_loss/len(self.trainloader), accuracy/len(self.trainloader)
@@ -87,22 +90,23 @@ class SupervisedTraining:
         current_val_loss = 0.0
         accuracy = 0.0
 
-        with torch.no_grad():
-            for val_inputs, val_targets in tqdm(self.valloader):
-                val_inputs = val_inputs.to(self.device)
-                val_targets = val_targets.to(self.device)
+        self.model.eval()
+        for val_inputs, val_targets in tqdm(self.valloader):
+            val_inputs = val_inputs.to(self.device)
+            val_targets = val_targets.to(self.device)
 
-                val_outputs = self.model(val_inputs)
-                val_loss = self.criterion(val_outputs.flatten(), val_targets)
+            val_outputs = self.model(val_inputs)
+            val_loss = self.criterion(val_outputs if  self.is_classification else val_outputs.flatten(), val_targets)
 
-                current_val_loss += val_loss.item()
+            current_val_loss += val_loss.item()
 
-                if accuracy is not None:
-                    accuracy += self.get_accuracy(val_outputs, val_targets)
+            # Compute accuracy for classification tasks
+            if self.is_classification:
+                accuracy += self.get_accuracy(val_outputs, val_targets)
 
         return current_val_loss/len(self.valloader), accuracy/len(self.valloader)
-    
-    def save_model(self,out_path):
+
+    def save_model(self, outpath):
         """
         Saves the model and optimizer state.
         """
@@ -110,45 +114,63 @@ class SupervisedTraining:
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-        }, out_path)
+        }, outpath)
 
-    def train(self,train_results_path=None,save_every=None,model_path=None):
+    def train(self, save_training_stats_every=10, save_model_every=None, outpath='training_result'):
         """
         Trains the model for the specified number of epochs and optionally saves training results and model checkpoints.
         """
 
+        # Create directories if necessary
+        if save_training_stats_every or save_model_every:
+            assert outpath is not None, 'outpath must be specified when save_training_stats_every or save_model_every is specified'
+
+            if not os.path.exists(os.path.join(outpath,'model')):
+                os.makedirs(os.path.join(outpath,'model'))
+
+        # Initialize training stats
         train_losses = []
         val_losses = []
 
         train_accuracies = []
         val_accuracies = []
 
-        for epoch in range(self.num_epochs):
-            self.model.train()
-            train_loss, train_acc = self.train_epoch()
+        best_val_loss = float('inf')
 
-            self.model.eval()
+        # Train for the specified number of epochs
+        for epoch in range(1,self.num_epochs+1):
+            # Train and validate
+            train_loss, train_acc = self.train_epoch()
             val_loss, val_acc = self.val_epoch()
 
-            if self.scheduler is not None:
-                self.scheduler.step()
+            # Save model if validation loss is the best so far
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                self.save_model(f'{outpath}/model/best.pth')
 
+            print(f'Epoch {epoch}/{self.num_epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}')
+
+            # Save test results and model checkpoints if necessary
+            if save_model_every and epoch % save_model_every == 0 and val_loss != best_val_loss:
+                self.save_model(f'{outpath}/model/epoch_{epoch:04d}.pth')
+
+            # Save training stats
             train_losses.append(train_loss)
             val_losses.append(val_loss)
 
             train_accuracies.append(train_acc)
             val_accuracies.append(val_acc)
 
-            if save_every and epoch % save_every == 0:
-                self.save_model(f'{model_path}/epoch_{epoch}.pth')
+            if save_training_stats_every and epoch % save_training_stats_every == 0:
+                with open(f'{outpath}/training_stats.pkl', 'wb') as f:
+                    training_stats = {
+                        'train_losses': train_losses,
+                        'val_losses': val_losses,
+                    }
 
-            print(f'Epoch {epoch+1}/{self.num_epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}')
+                    # Save accuracies for classification tasks
+                    if self.is_classification:
+                        training_stats['train_accuracies'] = train_accuracies
+                        training_stats['val_accuracies'] = val_accuracies
 
-        if train_results_path:
-            with open(train_results_path, 'wb') as f:
-                pickle.dump({
-                    'train_losses': train_losses,
-                    'val_losses': val_losses,
-                    'train_accuracies': train_accuracies,
-                    'val_accuracies': val_accuracies,
-                }, f)
+                    pickle.dump(training_stats, f)
