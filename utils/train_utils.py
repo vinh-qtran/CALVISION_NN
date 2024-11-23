@@ -1,4 +1,7 @@
 import os
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 
@@ -91,18 +94,19 @@ class SupervisedTraining:
         accuracy = 0.0
 
         self.model.eval()
-        for val_inputs, val_targets in tqdm(self.valloader):
-            val_inputs = val_inputs.to(self.device)
-            val_targets = val_targets.to(self.device)
+        with torch.no_grad():
+            for val_inputs, val_targets in tqdm(self.valloader):
+                val_inputs = val_inputs.to(self.device)
+                val_targets = val_targets.to(self.device)
 
-            val_outputs = self.model(val_inputs)
-            val_loss = self.criterion(val_outputs if  self.is_classification else val_outputs.flatten(), val_targets)
+                val_outputs = self.model(val_inputs)
+                val_loss = self.criterion(val_outputs if  self.is_classification else val_outputs.flatten(), val_targets)
 
-            current_val_loss += val_loss.item()
+                current_val_loss += val_loss.item()
 
-            # Compute accuracy for classification tasks
-            if self.is_classification:
-                accuracy += self.get_accuracy(val_outputs, val_targets)
+                # Compute accuracy for classification tasks
+                if self.is_classification:
+                    accuracy += self.get_accuracy(val_outputs, val_targets)
 
         return current_val_loss/len(self.valloader), accuracy/len(self.valloader)
 

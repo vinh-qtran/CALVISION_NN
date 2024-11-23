@@ -1,4 +1,7 @@
 import os
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 import awkward as ak
@@ -11,7 +14,7 @@ from torch.utils.data import TensorDataset,DataLoader
 
 import pandas as pd
 
-class LoadSCEPCALData:
+class ReadSCEPCALData:
     initial_particle_info = [
         'init_momentum',
         'init_eta',
@@ -248,14 +251,14 @@ if __name__ == '__main__':
                 inspect_data(Y.numpy())
 
     def check_SCEPCAL_data_reader():
-        SCEPCAL_data = LoadSCEPCALData('../../processed_data',read_full_hits_info=True,recalculate_reduced_hits_info=True,max_hit_count=None)
+        SCEPCAL_data = ReadSCEPCALData('../../processed_data',read_full_hits_info=True,recalculate_reduced_hits_info=True,max_hit_count=None)
 
         for field in SCEPCAL_data.data:
             print(field)
             inspect_data(SCEPCAL_data.data[field])
 
     def check_SCEPCAL_data_loader():
-        SCEPCAL_data = LoadSCEPCALData('../../processed_data',read_full_hits_info=True,recalculate_reduced_hits_info=True,max_hit_count=None)
+        SCEPCAL_data = ReadSCEPCALData('../../processed_data',read_full_hits_info=True,recalculate_reduced_hits_info=True,max_hit_count=None)
         SCEPCAL_data_loader = SCEPCALDataLoader(SCEPCAL_data.data)
 
         print('X:')
