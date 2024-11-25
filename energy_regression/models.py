@@ -15,7 +15,8 @@ class DNN(nn.Module):
                  output_dim : int,
                  dropout = 0.0,
                  activation = nn.ReLU(),
-                 is_classification=False):
+                 norm = nn.LayerNorm,
+                 is_classification=False,):
         super(DNN, self).__init__()
 
         self.input_dim = input_dim
@@ -25,20 +26,21 @@ class DNN(nn.Module):
         self.dropout = dropout
 
         self.activation = activation
+        self.norm = norm
         self.is_classification = is_classification
         
         self.layers = []
         for i in range(len(hidden_dims)):
             self.layers.append(nn.Dropout(p=self.dropout))
             if i == 0:
-                self.layers.append(nn.LayerNorm(input_dim))
+                self.layers.append(self.norm(input_dim))
                 self.layers.append(nn.Linear(input_dim, hidden_dims[i]))
             else:
-                self.layers.append(nn.LayerNorm(hidden_dims[i-1]))
+                self.layers.append(self.norm(hidden_dims[i-1]))
                 self.layers.append(nn.Linear(hidden_dims[i-1], hidden_dims[i]))
             self.layers.append(self.activation)
 
-        self.layers.append(nn.LayerNorm(hidden_dims[-1]))
+        self.layers.append(self.norm(hidden_dims[-1]))
         self.layers.append(nn.Linear(hidden_dims[-1], output_dim))
 
         self.last_activation = nn.Softmax(dim=1) if is_classification else nn.Identity()

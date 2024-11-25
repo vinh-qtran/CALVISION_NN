@@ -210,8 +210,10 @@ class SCEPCALDataLoader:
 
         N_train = int(N_sample*self.train_val_ratio[0])
         N_val = int(N_sample*self.train_val_ratio[1])
+        print('N_train:',N_train)
+        print('N_val:',N_val)
 
-        all_dataset = TensorDataset(torch.from_numpy(self.X),torch.from_numpy(self.Y))
+        all_dataset = TensorDataset(torch.from_numpy(self.X).to(dtype=torch.float32),torch.from_numpy(self.Y).to(dtype=torch.float32))
 
         train_dataset, val_dataset = torch.utils.data.random_split(
             all_dataset,

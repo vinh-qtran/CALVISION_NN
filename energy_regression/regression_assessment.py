@@ -28,7 +28,7 @@ class NNRegressionResolution:
 
         self.model = model
         self.model.load_state_dict(model_state_dict)
-        self.model.to(self.device)
+        self.model.to(self.device,dtype=torch.float32)
 
         self.val_loader = val_loader
 
@@ -77,7 +77,8 @@ class LinearEnergyRegression:
 
         self.deviation_bins = deviation_bins
 
-        self.params, self.params_err = self._fit()
+        self._fit()
+        self._get_resolution()
 
     def linear_fit(self, x, a, b):
         return a*x + b
@@ -85,10 +86,8 @@ class LinearEnergyRegression:
     def _fit(self):
         popt, pcov = curve_fit(self.linear_fit, self.total_hits_energy, self.initial_momentum)
 
-        params = popt
-        params_err = np.sqrt(np.diag(pcov))
-
-        return params, params_err
+        self.params = popt
+        self.params_err = np.sqrt(np.diag(pcov))
     
     def _get_resolution(self):
         self.predicted_momentum = self.linear_fit(self.total_hits_energy, *self.params)

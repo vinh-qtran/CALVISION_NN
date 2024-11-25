@@ -25,7 +25,7 @@ class SupervisedTraining:
             valloader : DataLoader,
             num_epochs : int,
             lr : float,
-            criterion=nn.CrossEntropyLoss(),
+            criterion=nn.MSELoss(),
             optimizer=optim.Adam,
             scheduler=None,
             is_classification=True,
@@ -33,8 +33,8 @@ class SupervisedTraining:
     ): 
         self.device = device
 
-        self.model = model.to(self.device)
-        self.criterion = criterion.to(self.device)
+        self.model = model.to(self.device,dtype=torch.float32)
+        self.criterion = criterion.to(self.device,dtype=torch.float32)
         self.optimizer = optimizer(self.model.parameters(), lr=lr)
         self.scheduler = scheduler
 
@@ -63,7 +63,7 @@ class SupervisedTraining:
         accuracy = 0.0
 
         self.model.train()
-        for train_inputs, train_targets in tqdm(self.trainloader):
+        for train_inputs, train_targets in self.trainloader:
             train_inputs = train_inputs.to(self.device)
             train_targets = train_targets.to(self.device)
 
@@ -95,7 +95,7 @@ class SupervisedTraining:
 
         self.model.eval()
         with torch.no_grad():
-            for val_inputs, val_targets in tqdm(self.valloader):
+            for val_inputs, val_targets in self.valloader:
                 val_inputs = val_inputs.to(self.device)
                 val_targets = val_targets.to(self.device)
 
@@ -142,7 +142,7 @@ class SupervisedTraining:
         best_val_loss = float('inf')
 
         # Train for the specified number of epochs
-        for epoch in range(1,self.num_epochs+1):
+        for epoch in tqdm(range(1,self.num_epochs+1),desc='Training'):
             # Train and validate
             train_loss, train_acc = self.train_epoch()
             val_loss, val_acc = self.val_epoch()
@@ -152,7 +152,8 @@ class SupervisedTraining:
                 best_val_loss = val_loss
                 self.save_model(f'{outpath}/model/best.pth')
 
-            print(f'Epoch {epoch}/{self.num_epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f}')
+            if epoch % save_training_stats_every == 0:
+                tqdm.write(f'Epoch {epoch}/{self.num_epochs} - Train Loss: {train_loss:.5f} - Val Loss: {val_loss:.5f}')
 
             # Save test results and model checkpoints if necessary
             if save_model_every and epoch % save_model_every == 0 and val_loss != best_val_loss:
